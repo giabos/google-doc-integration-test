@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>GDOC POC</title>
+    <meta charset='utf-8' />
+</head>
+
+<body>
+    <p>Drive API Quickstart</p>
+
+    <!--Add buttons to initiate auth sequence and sign out-->
+
+    <button id="edit">EDIT</button>
+    <button id="save">SAVE</button>
+
+    <hr>
+
+    <button id="authorize-button" style="display: none;">Authorize</button>
+    <button id="signout-button" style="display: none;">Sign Out</button>
+
+    <pre id="content"></pre>
+
+    <script type="text/javascript" src="index.js"></script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="this.onload=function(){}; handleClientLoad()" onreadystatechange="if (this.readyState === 'complete') this.onload()">
+    </script>
+</body>
+
+</html>
