@@ -165,3 +165,51 @@ function appendPre (message) {
     pre.appendChild(textContent);
 }
     
+
+
+
+
+function alfrescoToGoogleDoc (uuid, name) {
+    let contentType = "application/octet-stream";
+    return fetch("http://localhost/alfresco/s/api/node/workspace/SpacesStore/" + uuid + "/content").then(function (response) {
+        contentType = response.headers.get("content-type");
+        window.contentType = contentType;
+        return response.blob();
+    }).then(data => insertFile(data, name, contentType));
+}
+
+window.uuid = "a690a790-308d-4433-a531-724fdb0741b6";
+
+document.getElementById('edit').onclick = function () {
+    alfrescoToGoogleDoc(window.uuid, "test3.doc").then(result => {
+        //console.log(result);
+        openInNewTab("https://docs.google.com/document/d/" + result.id + "/edit")
+        //openInNewTab("https://drive.google.com/file/d/" + result.id + "/view?usp=drivesdk")
+
+        window.gdId = result.id;
+
+        /*
+        var request = gapi.client.drive.files.get({
+            fileId: result.id
+        });
+        request.execute(function(resp) {
+            console.log("----------------");
+            console.log(resp);
+        });
+        */
+    });
+};
+
+document.getElementById('save').onclick = function () {
+    //var targetMimetype = window.contentType;
+    var targetMimetype = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    googleDocContent(window.gdId, targetMimetype).then(data => alfrescoUploadContent(window.uuid, data, targetMimetype)).then(() => console.log("ok"));
+
+    /*
+    fetch("http://localhost/alfresco/s/api/node/workspace/SpacesStore/" + window.uuid + "/content").then(function (response) {
+        return response.blob();
+    }).then(data => {
+        return updateAlfDoc2 (window.uuid, data, targetMimetype);
+    }).then(a => console.log("ok"));
+    */
+};
