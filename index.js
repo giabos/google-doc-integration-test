@@ -74,6 +74,38 @@ function handleSignoutClick(event) {
 class GoogleDrive {
 
     /**
+     * Creates a folder or get the existing folder if already exists.
+     * 
+     * @param {*} name of the folder
+     * @param {*} folderParentId  where to create the new folder
+     */
+    createOrGetFolder (name, folderParentId = "root") {
+        const mimeType = "application/vnd.google-apps.folder";
+        const q = "name='" + name + "' and mimeType='" + mimeType + "' and parents in 'root' and trashed = false";
+        const url = "https://www.googleapis.com/drive/v3/files?q=" + encodeURIComponent(q);
+
+        return new Promise((resolve, reject) => {
+            fetch(url, {
+                headers: {
+                    authorization: "Bearer " + gapi.auth2.getAuthInstance().currentUser.get().getAuthResponse().access_token,
+                }
+            }).then(a => a.json()).then(r => {
+                if (r.files.length > 0) {
+                    resolve(r.files[0].id);
+                } else {
+                    const request = gapi.client.request({
+                        path: '/drive/v3/files',
+                        method: 'POST',
+                        body: JSON.stringify({name: name, mimeType: mimeType, parents: [{id: folderParentId}]})
+                    });
+                    request.execute(resp => resolve(resp.id));
+                }
+            });
+        });
+    }
+
+
+    /**
      * Insert new file in google drive.
      *
      * @param {Blob} data content of the file.
@@ -83,7 +115,8 @@ class GoogleDrive {
      * 
      * @returns Promise with result
      */
-    createDoc (data, name, contentType) {
+    createDoc (data, name, contentType, parentFolderId = "root") {
+
         const boundary = '-------314159265358979323846';
         const delimiter = "\r\n--" + boundary + "\r\n";
         const close_delim = "\r\n--" + boundary + "--";
@@ -92,6 +125,7 @@ class GoogleDrive {
             title: name,
             name: name,
             mimeType: contentType,
+            parents: [{id: parentFolderId}],
             //convert: "application/vnd.google-apps.document",
         };
 
@@ -141,7 +175,14 @@ class GoogleDrive {
     }
     
 
-
+    deleteDoc (id) {
+        return fetch("https://www.googleapis.com/drive/v3/files/" + id, {
+            method: "DELETE",
+            headers: {
+                authorization: "Bearer " + gapi.auth2.getAuthInstance().currentUser.get().getAuthResponse().access_token,
+            },
+        });
+    }
 }
 
 
@@ -179,19 +220,68 @@ class Alfresco {
         });
     }
 
+    /**
+     * Update the content of an existing alfresco document (using APIX).
+     * 
+     * @param {*} uuid 
+     * @param {*} data 
+     * @param {*} contentType 
+     */
+    updateContent_OLD2 (uuid, data, contentType) {
+        const self = this;
+        return new Promise((resolve, reject) => {
+            var reader = new window.FileReader();
+            reader.readAsArrayBuffer(data);
+            reader.onloadend = function () {
+                var data = new FormData();
+                data.append("file", new File([reader.result], 'name.docx'));
+                fetch(self.baseUrl + "/apix/v1/nodes/workspace/SpacesStore/" + uuid + "/content", {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "multipart/form-data",
+                    },
+                    body: data,
+                }).then(resolve).catch(reject);
+            };
+        });
+    }
+
+
+    updateContent_OLD3 (uuid, data, contentType) {
+        return new Promise((resolve, reject) => {
+            var reader = new window.FileReader();
+            reader.readAsBinaryString(data);
+            reader.onloadend = function () {
+                fetch("http://localhost/alfresco/api/-default-/public/cmis/versions/1.1/atom/content?id=" + uuid, {
+                    method: "PUT",
+                    body: reader.result,
+                    headers: {
+                        "Content-Type": contentType || "application/vnd.google-apps.document",
+                        "Content-Length": reader.result.length,
+                    }
+                }).then(resolve).catch(reject);
+            }
+        });
+    }
+
 }
 
 
 (function () {
 
+    const GDRIVE_ROOT_FOLDER_NAME = "ALFRED-FINDER-DOCS";
+
     const alfresco = new Alfresco("http://localhost/alfresco/s");
     const gdrive = new GoogleDrive(); 
 
-    const uuid = "a690a790-308d-4433-a531-724fdb0741b6";
+    const uuid = "c73cc4b1-263e-432a-a689-d8a7f7119ad5";
     let gdocId = "";
 
     document.getElementById('edit').onclick = function () {
-        alfresco.getContent(uuid).then(([data, contentType]) => gdrive.createDoc(data, uuid, contentType)).then(id => { 
+
+        const all = Promise.all([ alfresco.getContent(uuid),  gdrive.createOrGetFolder("ALFRED-FINDER-DOCS")  ]);
+
+        all.then(([[data, contentType], folderId]) => gdrive.createDoc(data, uuid, contentType, folderId)).then(id => { 
             gdocId = id;
             openInNewTab("https://docs.google.com/document/d/" + id + "/edit")    
             //openInNewTab("https://drive.google.com/file/d/" + id + "/view?usp=drivesdk")
@@ -200,7 +290,20 @@ class Alfresco {
 
     document.getElementById('save').onclick = function () {
         var targetMimetype = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-        gdrive.getContent(gdocId, targetMimetype).then(data => alfresco.updateContent(uuid, data, targetMimetype)).then(() => console.log("ok"));
+        gdrive.getContent(gdocId, targetMimetype).then(data => alfresco.updateContent(uuid, data, targetMimetype)).then(() => gdrive.deleteDoc(gdocId) ).then(() => console.log("ok"));
+        };
+
+
+    document.getElementById('test').onclick = function () {
+        const contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        alfresco.getContent(uuid).then(result => {
+            console.log("aaaa");
+            alfresco.updateContent(uuid, result[0], contentType).then(() => console.log("uploaded!")).catch(() => console.log("error!"));
+        });
+    };
+
+    document.getElementById('test2').onclick = function () {
+        gdrive.createOrGetFolder("TEST1").then(id => console.log("id: " + id));
     };
 
 })();

@@ -108,7 +108,7 @@ function updateAlfDoc (uuid, data, contentType) {
                 headers: {
                     "Content-Type": contentType || "application/vnd.google-apps.document"
                 }
-            }).then(resolve);
+            }).then(resolve).catch(reject);
         }
     });
 }
